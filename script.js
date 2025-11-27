@@ -1,5 +1,5 @@
 // Constants
-const IMAGE_SIZE = 224; // Standard input size for many models (ResNet, MobileNet, etc.)
+const IMAGE_SIZE = 128; // Standard input size for many models (ResNet, MobileNet, etc.)
 // Adjust this if your models expect a different size
 
 let currentModel = null;
@@ -65,7 +65,7 @@ function handleFile(file) {
         imagePreview.src = e.target.result;
         previewContainer.style.display = 'block';
         resultArea.style.display = 'none';
-        
+
         // Wait for image to load before predicting
         imagePreview.onload = () => {
             if (currentModel) {
@@ -85,7 +85,7 @@ async function loadModel(path) {
         if (currentModel) {
             currentModel.dispose();
         }
-        
+
         console.log(`Loading model from ${path}...`);
         currentModel = await tf.loadLayersModel(path);
         console.log('Model loaded successfully');
@@ -101,7 +101,7 @@ async function predict() {
     if (!currentModel || !imagePreview) return;
 
     loadingOverlay.style.display = 'flex';
-    
+
     // Small delay to allow UI to update
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -111,18 +111,18 @@ async function predict() {
             let tensor = tf.browser.fromPixels(imagePreview)
                 .resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE]) // Resize
                 .toFloat();
-            
+
             // Normalize (assuming 0-1 or -1 to 1 depending on model training)
             // Common practice: tensor.div(255.0)
             tensor = tensor.div(255.0);
-            
+
             // Expand dimensions to match batch size [1, 224, 224, 3]
             const batched = tensor.expandDims(0);
 
             // Inference
             const prediction = currentModel.predict(batched);
             const score = prediction.dataSync()[0]; // Assuming binary classification output [0-1]
-            
+
             displayResult(score);
         });
     } catch (error) {
@@ -135,14 +135,14 @@ async function predict() {
 
 function displayResult(score) {
     resultArea.style.display = 'block';
-    
+
     // Assuming score > 0.5 is AI, < 0.5 is Real
     // Adjust this logic based on your specific model's training
-    const isAI = score > 0.5;
+    const isAI = score > 0.7;
     const percentage = (score * 100).toFixed(1);
-    
+
     probBar.style.width = `${percentage}%`;
-    
+
     if (isAI) {
         resultText.textContent = 'Likely AI Generated';
         resultText.style.color = '#ef4444'; // Red
@@ -152,6 +152,6 @@ function displayResult(score) {
         resultText.style.color = '#22c55e'; // Green
         probBar.style.background = 'linear-gradient(90deg, #4ade80, #22c55e)';
     }
-    
+
     confidenceText.textContent = `Confidence Score: ${percentage}%`;
 }
