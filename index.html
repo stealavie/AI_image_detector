@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Detector</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+</head>
+<body>
+    <div class="background-gradient"></div>
+    
+    <main class="container">
+        <header>
+            <h1>AI Image Detector</h1>
+            <p>Upload an image to check if it's AI-generated</p>
+        </header>
+
+        <div class="glass-panel">
+            <div class="model-selector">
+                <label for="modelSelect">Select Model:</label>
+                <select id="modelSelect">
+                    <option value="" disabled selected>Choose a model...</option>
+                    <!-- Options will be populated by script.js or manually added here -->
+                    <option value="web_models/model1/model.json">Model 1</option>
+                    <option value="web_models/model2/model.json">Model 2</option>
+                    <option value="web_models/model3/model.json">Model 3</option>
+                </select>
+            </div>
+
+            <div class="upload-area" id="dropZone">
+                <input type="file" id="fileInput" accept="image/*" hidden>
+                <div class="upload-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48">
+                        <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                    </svg>
+                    <p>Click or Drag & Drop Image Here</p>
+                </div>
+            </div>
+
+            <div class="preview-container" id="previewContainer" style="display: none;">
+                <img id="imagePreview" alt="Preview" />
+                <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing...</p>
+                </div>
+            </div>
+
+            <div class="result-area" id="resultArea" style="display: none;">
+                <h2>Result</h2>
+                <div class="probability-bar-container">
+                    <div class="probability-bar" id="probBar"></div>
+                </div>
+                <p class="result-text" id="resultText"></p>
+                <p class="confidence-text" id="confidenceText"></p>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
