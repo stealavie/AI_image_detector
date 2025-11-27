@@ -87,20 +87,41 @@ async function loadModel(path) {
         }
 
         console.log(`Loading model from ${path}...`);
-        currentModel = await tf.loadLayersModel(path);
-        console.log('Model loaded successfully');
+
+        try {
+            // Cách 1: Tải thủ công qua IOHandler để vá lỗi tương thích Keras 3 (batch_shape -> batchInputShape)
+            const handler = tf.io.browserHTTPRequest(path);
+            const modelArtifacts = await handler.load();
+
+            // Vá lỗi: Đổi batch_shape thành batchInputShape trong cấu hình JSON
+            if (modelArtifacts.modelTopology?.model_config?.config?.layers) {
+                const layers = modelArtifacts.modelTopology.model_config.config.layers;
+                layers.forEach(layer => {
+                    if (layer.config && layer.config.batch_shape) {
+                        layer.config.batchInputShape = layer.config.batch_shape;
+                        delete layer.config.batch_shape;
+                    }
+                });
+            }
+
+            // Nạp model từ artifacts đã vá
+            currentModel = await tf.loadLayersModel(tf.io.fromMemory(modelArtifacts));
+            console.log('Model loaded successfully as LayersModel');
+
+        } catch (layerError) {
+            console.warn("Failed to load as LayersModel, trying GraphModel...", layerError);
+            try {
+                // Cách 2: Nếu thất bại, thử tải như một Graph Model (SavedModel/TFHub style)
+                currentModel = await tf.loadGraphModel(path);
+                console.log("Model loaded as GraphModel");
+            } catch (graphError) {
+                console.error("Could not load model as Layer or Graph:", graphError);
+                throw graphError;
+            }
+        }
     } catch (error) {
-        console.warn("Failed to load as LayersModel, trying GraphModel...", error);
-    try {
-        // Nếu thất bại, thử tải như một Graph Model (SavedModel/TFHub style)
-        // MobileNet và ResNet thường rơi vào trường hợp này
-        model = await tf.loadGraphModel(path);
-        console.log("Model loaded as GraphModel");
-    } catch (graphError) {
-        console.error("Could not load model as Layer or Graph:", graphError);
+        console.error("Final load error:", error);
         alert('Failed to load model. Make sure the model files (model.json and .bin) are in the correct folder.');
-        throw graphError;
-    }
     } finally {
         loadingOverlay.style.display = 'none';
     }
