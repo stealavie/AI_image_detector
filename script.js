@@ -90,8 +90,17 @@ async function loadModel(path) {
         currentModel = await tf.loadLayersModel(path);
         console.log('Model loaded successfully');
     } catch (error) {
-        console.error('Error loading model:', error);
+        console.warn("Failed to load as LayersModel, trying GraphModel...", error);
+    try {
+        // Nếu thất bại, thử tải như một Graph Model (SavedModel/TFHub style)
+        // MobileNet và ResNet thường rơi vào trường hợp này
+        model = await tf.loadGraphModel(path);
+        console.log("Model loaded as GraphModel");
+    } catch (graphError) {
+        console.error("Could not load model as Layer or Graph:", graphError);
         alert('Failed to load model. Make sure the model files (model.json and .bin) are in the correct folder.');
+        throw graphError;
+    }
     } finally {
         loadingOverlay.style.display = 'none';
     }
