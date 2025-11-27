@@ -88,40 +88,90 @@ async function loadModel(path) {
 
         console.log(`Loading model from ${path}...`);
 
+        // Try direct loading first (for properly converted models)
         try {
-            // Cách 1: Tải thủ công qua IOHandler để vá lỗi tương thích Keras 3 (batch_shape -> batchInputShape)
+            currentModel = await tf.loadLayersModel(path);
+            console.log('Model loaded successfully (direct load)');
+            loadingOverlay.style.display = 'none';
+            return;
+        } catch (directError) {
+            console.warn('Direct load failed, trying manual patching...', directError);
+        }
+
+        // Manual patching approach for Keras 3 models
+        try {
             const handler = tf.io.browserHTTPRequest(path);
             const modelArtifacts = await handler.load();
 
-            // Vá lỗi: Đổi batch_shape thành batchInputShape trong cấu hình JSON
+            // Deep patch for Keras 3 compatibility
             if (modelArtifacts.modelTopology?.model_config?.config?.layers) {
                 const layers = modelArtifacts.modelTopology.model_config.config.layers;
-                layers.forEach(layer => {
-                    if (layer.config && layer.config.batch_shape) {
+                
+                layers.forEach((layer, idx) => {
+                    // Fix batch_shape -> batchInputShape
+                    if (layer.config?.batch_shape) {
                         layer.config.batchInputShape = layer.config.batch_shape;
                         delete layer.config.batch_shape;
                     }
+
+                    // Fix dtype object -> string
+                    if (layer.config?.dtype && typeof layer.config.dtype === 'object') {
+                        layer.config.dtype = layer.config.dtype.config?.name || 'float32';
+                    }
+
+                    // Fix inbound_nodes (Keras 3 -> TFJS format)
+                    if (layer.inbound_nodes && Array.isArray(layer.inbound_nodes)) {
+                        const newInboundNodes = [];
+                        
+                        layer.inbound_nodes.forEach(node => {
+                            if (node && node.args && Array.isArray(node.args)) {
+                                // Keras 3 format: extract keras_history from each arg
+                                const nodeConnections = [];
+                                node.args.forEach(arg => {
+                                    if (arg?.config?.keras_history) {
+                                        nodeConnections.push(arg.config.keras_history);
+                                    }
+                                });
+                                if (nodeConnections.length > 0) {
+                                    newInboundNodes.push(nodeConnections);
+                                }
+                            } else if (Array.isArray(node)) {
+                                // Already in TFJS format
+                                newInboundNodes.push(node);
+                            }
+                        });
+                        
+                        layer.inbound_nodes = newInboundNodes;
+                    }
+
+                    // Fix initializers, regularizers, constraints
+                    ['kernel_initializer', 'bias_initializer', 'kernel_regularizer', 
+                     'bias_regularizer', 'activity_regularizer', 'kernel_constraint', 
+                     'bias_constraint'].forEach(key => {
+                        if (layer.config?.[key] && typeof layer.config[key] === 'object') {
+                            const val = layer.config[key];
+                            if (val.module && val.class_name) {
+                                layer.config[key] = {
+                                    className: val.class_name,
+                                    config: val.config || {}
+                                };
+                            }
+                        }
+                    });
                 });
             }
 
-            // Nạp model từ artifacts đã vá
+            // Load patched model
             currentModel = await tf.loadLayersModel(tf.io.fromMemory(modelArtifacts));
-            console.log('Model loaded successfully as LayersModel');
+            console.log('Model loaded successfully (with patching)');
 
-        } catch (layerError) {
-            console.warn("Failed to load as LayersModel, trying GraphModel...", layerError);
-            try {
-                // Cách 2: Nếu thất bại, thử tải như một Graph Model (SavedModel/TFHub style)
-                currentModel = await tf.loadGraphModel(path);
-                console.log("Model loaded as GraphModel");
-            } catch (graphError) {
-                console.error("Could not load model as Layer or Graph:", graphError);
-                throw graphError;
-            }
+        } catch (patchError) {
+            console.error("Patching failed:", patchError);
+            throw new Error('Unable to load model. Please reconvert using the latest tensorflowjs converter.');
         }
     } catch (error) {
         console.error("Final load error:", error);
-        alert('Failed to load model. Make sure the model files (model.json and .bin) are in the correct folder.');
+        alert('Failed to load model. The model format may be incompatible. Please reconvert your Keras model using:\n\ntensorflowjs_converter --input_format=keras your_model.h5 output_dir/');
     } finally {
         loadingOverlay.style.display = 'none';
     }
